@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perú Dividido — Segunda Vuelta 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{
+  --k:#C1272D;--k2:#8B1A1E;--kd:#1a0304;
+  --r:#1B4F8A;--r2:#123560;--rd:#05101e;
+  --bg:#0b0d12;--s1:#12151f;--s2:#181c28;--bd:#20263a;
+  --tx:#e8eaf0;--mt:#6b7494;--dm:#2e3450;--gd:#c9a84c;
+  --kl:#e07075;--rl:#5080b8;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--tx);font-family:'Barlow',sans-serif;display:flex;flex-direction:column;}
+
+/* TICKER */
+.ticker{flex-shrink:0;background:var(--s1);border-bottom:1px solid var(--bd);height:26px;overflow:hidden;position:relative;}
+.ticker::before,.ticker::after{content:'';position:absolute;top:0;width:40px;height:100%;z-index:2;pointer-events:none;}
+.ticker::before{left:0;background:linear-gradient(90deg,var(--s1),transparent);}
+.ticker::after{right:0;background:linear-gradient(90deg,transparent,var(--s1));}
+.ttrack{display:flex;animation:tick 40s linear infinite;white-space:nowrap;height:100%;align-items:center;}
+.ti{font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mt);padding:0 28px;}
+.ti b{font-weight:700;}.ti .k{color:var(--kl);}.ti .r{color:var(--rl);}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* HEADER */
+.hdr{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:8px 20px;border-bottom:1px solid var(--bd);gap:16px;background:var(--s1);}
+.ey{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--gd);margin-bottom:3px;}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:900;line-height:1;}
+h1 .ek{color:var(--kl);}h1 .er{color:var(--rl);}
+.sub{font-size:10px;color:var(--mt);margin-top:2px;}
+
+/* SCORES */
+.sw{display:flex;flex-direction:column;flex-shrink:0;}
+.sc{display:flex;border:1px solid var(--bd);border-radius:3px 3px 0 0;overflow:hidden;}
+.sk,.sr{padding:7px 14px;min-width:130px;}
+.sk{background:var(--kd);border-right:1px solid var(--bd);}
+.sr{background:var(--rd);}
+.sn{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;margin-bottom:1px;}
+.sk .sn{color:var(--kl);}.sr .sn{color:var(--rl);}
+.sp{font-family:'Barlow Condensed',sans-serif;font-size:26px;font-weight:900;line-height:1;}
+.sk .sp{color:var(--k);}.sr .sp{color:var(--r);}
+.sv{font-size:10px;color:var(--mt);}
+.race{display:flex;height:4px;border-radius:0 0 3px 3px;overflow:hidden;
+  border:1px solid var(--bd);border-top:none;}
+.rk{background:var(--k);transition:width 1.2s ease;}
+.rr{background:var(--r);transition:width 1.2s ease;}
+
+/* STATS */
+.stats{flex-shrink:0;display:grid;grid-template-columns:repeat(4,1fr);
+  border-bottom:1px solid var(--bd);}
+.st{padding:5px 0;text-align:center;border-right:1px solid var(--bd);}
+.st:last-child{border-right:none;}
+.stv{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;}
+.stl{font-size:9px;color:var(--dm);text-transform:uppercase;letter-spacing:.07em;margin-top:1px;}
+
+/* BODY */
+.body{flex:1;display:grid;grid-template-columns:1fr 260px;min-height:0;}
+
+/* MAP */
+.mwrap{position:relative;background:var(--bg);border-right:1px solid var(--bd);overflow:hidden;}
+#svg{width:100%;height:100%;display:block;}
+.dp{stroke:#ffffff08;stroke-width:.3;cursor:pointer;}
+.dp:hover{stroke:#ffffffaa;stroke-width:.9;}
+.dp.sel{stroke:#ffffffcc;stroke-width:1.2;}
+.dbl{fill:none;stroke:#ffffff28;stroke-width:.6;pointer-events:none;}
+
+/* OVERLAYS */
+.ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;z-index:20;}
+.ov.hidden{display:none;}
+#ov-load{background:var(--bg);}
+.spin{width:28px;height:28px;border:2px solid var(--bd);border-top-color:var(--gd);
+  border-radius:50%;animation:sp .7s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ltxt{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:var(--mt);letter-spacing:.15em;}
+
+/* MAP CTRL */
+.mc{position:absolute;bottom:12px;right:12px;display:flex;flex-direction:column;gap:4px;}
+.mb{width:26px;height:26px;background:var(--s2);border:1px solid var(--bd);color:var(--mt);
+  border-radius:3px;cursor:pointer;font-size:15px;display:flex;align-items:center;
+  justify-content:center;transition:all .15s;}
+.mb:hover{background:var(--bd);color:var(--tx);}
+
+/* BADGE */
+.badge{position:absolute;top:10px;left:10px;background:rgba(18,21,31,.85);
+  border:1px solid var(--bd);border-radius:3px;padding:4px 8px;
+  font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--mt);
+  letter-spacing:.08em;text-transform:uppercase;pointer-events:none;}
+
+/* SIDEBAR */
+.sb{background:var(--s1);overflow-y:auto;display:flex;flex-direction:column;}
+.sb::-webkit-scrollbar{width:3px;}.sb::-webkit-scrollbar-thumb{background:var(--bd);}
+.pn{padding:12px 12px;border-bottom:1px solid var(--bd);}
+.pt{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:.2em;text-transform:uppercase;color:var(--dm);margin-bottom:9px;}
+
+/* TABS */
+.vts{display:flex;border-bottom:1px solid var(--bd);}
+.vt{flex:1;padding:7px 2px;text-align:center;font-family:'Barlow Condensed',sans-serif;
+  font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--dm);border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;}
+.vt.on{color:var(--tx);border-bottom-color:var(--gd);}
+.vt:hover:not(.on){color:var(--mt);}
+
+/* LEGEND */
+.lr{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mt);margin-bottom:4px;}
+.ls{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.lg{height:6px;border-radius:2px;margin:4px 0 2px;}
+.ll{display:flex;justify-content:space-between;font-size:9px;color:var(--dm);}
+
+/* SELECT */
+select{width:100%;padding:5px 8px;background:var(--s2);border:1px solid var(--bd);
+  color:var(--tx);border-radius:3px;font-size:11px;cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%236b7494'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 7px center;}
+select:focus{outline:none;border-color:var(--gd);}
+
+/* DETAIL */
+.dn{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;line-height:1.1;}
+.dl{font-size:10px;color:var(--mt);margin-bottom:9px;}
+.bl{display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px;}
+.bl .cn{font-weight:600;}.bl .cp{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;}
+.bt{height:4px;background:var(--s2);border-radius:3px;overflow:hidden;margin-bottom:7px;}
+.bf{height:100%;border-radius:3px;transition:width .5s;}
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:7px;}
+.dc{background:var(--s2);border:1px solid var(--bd);border-radius:3px;padding:5px 7px;}
+.dcl{font-size:9px;color:var(--dm);text-transform:uppercase;letter-spacing:.05em;}
+.dcv{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;}
+.de{font-size:11px;color:var(--mt);font-style:italic;}
+
+/* TOP */
+.tr{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd);}
+.tr:last-child{border:none;}
+.tn{font-family:'Barlow Condensed',sans-serif;font-size:9px;color:var(--dm);width:12px;text-align:right;}
+.td{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.tnm{font-size:10px;flex:1;}
+.tv{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;}
+
+/* TOOLTIP */
+#tt{position:fixed;background:var(--s2);border:1px solid var(--bd);border-radius:3px;
+  padding:9px 11px;pointer-events:none;opacity:0;transition:opacity .1s;z-index:200;
+  min-width:175px;box-shadow:0 6px 20px rgba(0,0,0,.7);}
+.ttn{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;margin-bottom:1px;}
+.ttl{font-size:9px;color:var(--mt);margin-bottom:6px;}
+.ttr{display:flex;justify-content:space-between;gap:10px;font-size:10px;margin-bottom:2px;}
+.ttp{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;}
+.ttw{margin-top:5px;padding-top:5px;border-top:1px solid var(--bd);
+  font-family:'Barlow Condensed',sans-serif;font-size:9px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--mt);}
+.ttnd{font-size:10px;color:var(--mt);font-style:italic;}
+.ttac{font-size:9px;color:var(--dm);margin-top:3px;}
+
+/* FOOTER */
+footer{flex-shrink:0;border-top:1px solid var(--bd);padding:4px 20px;
+  display:flex;justify-content:space-between;align-items:center;background:var(--s1);}
+footer span{font-size:9px;color:var(--dm);}
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
+
+/* TABLET: 600–900px */
+@media (max-width: 900px) {
+  .body { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; }
+  .mwrap { border-right: none; border-bottom: 1px solid var(--bd); }
+  .sb { overflow-y: visible; max-height: none; }
+  .vts { position: sticky; top: 0; z-index: 10; background: var(--s1); }
+  h1 { font-size: 20px; }
+  .sw { display: none; }         /* scoreboard al header — en móvil va al panel */
+  .stats { grid-template-columns: repeat(4,1fr); }
+}
+
+/* MOBILE: <600px */
+@media (max-width: 600px) {
+  /* Ticker oculto en móvil — ocupa espacio útil */
+  .ticker { display: none; }
+
+  /* Header ultra compacto */
+  .hdr { padding: 6px 12px; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .ey  { display: none; }
+  h1   { font-size: 18px; }
+  .sub { font-size: 9px; }
+  .sw  { display: none; }
+
+  /* Stats: 2 columnas en lugar de 4 */
+  .stats { grid-template-columns: repeat(2,1fr); }
+  .stv   { font-size: 14px; }
+
+  /* Body: mapa ocupa 58% de pantalla, sidebar el resto */
+  html, body { overflow: auto; }
+  .body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 58vh auto;
+    min-height: 0;
+    height: auto;
+  }
+  .mwrap { height: 58vh; }
+
+  /* Sidebar como panel fijo debajo del mapa */
+  .sb {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: none;
+  }
+
+  /* Scoreboard compacto DENTRO del sidebar en móvil */
+  .sb-score {
+    display: flex !important;
+    flex-direction: column;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--bd);
+    gap: 0;
+  }
+  .sb-score .sc {
+    display: flex; border: 1px solid var(--bd);
+    border-radius: 3px 3px 0 0; overflow: hidden;
+  }
+  .sb-score .sk, .sb-score .sr { flex: 1; padding: 6px 10px; min-width: 0; }
+  .sb-score .sk { background: var(--kd); border-right: 1px solid var(--bd); }
+  .sb-score .sr { background: var(--rd); }
+  .sb-score .sn { font-family: 'Barlow Condensed',sans-serif; font-size: 9px;
+    font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1px; }
+  .sb-score .sk .sn { color: var(--kl); } .sb-score .sr .sn { color: var(--rl); }
+  .sb-score .sp { font-family: 'Barlow Condensed',sans-serif; font-size: 22px; font-weight: 900; line-height: 1; }
+  .sb-score .sk .sp { color: var(--k); } .sb-score .sr .sp { color: var(--r); }
+  .sb-score .sv { font-size: 9px; color: var(--mt); }
+  .sb-score .race { display: flex; height: 3px;
+    border-radius: 0 0 3px 3px; overflow: hidden;
+    border: 1px solid var(--bd); border-top: none; }
+  .sb-score .rk { background: var(--k); }
+  .sb-score .rr { background: var(--r); }
+
+  /* Ocultar secciones secundarias en móvil para no saturar */
+  .sb-legend { display: none; }
+
+  /* View tabs más grandes para touch */
+  .vt { padding: 10px 2px; font-size: 11px; }
+
+  /* Panel detalle y top list compactos */
+  .pn { padding: 10px 10px; }
+  .pt { margin-bottom: 7px; }
+
+  /* Controles de zoom más grandes para touch */
+  .mc { bottom: 10px; right: 10px; }
+  .mb { width: 36px; height: 36px; font-size: 20px; }
+
+  /* Tooltip más pequeño en móvil */
+  #tt { font-size: 10px; min-width: 150px; padding: 8px 10px; }
+
+  /* Footer oculto en móvil */
+  footer { display: none; }
+}
+
+/* Touch: eliminar hover en dispositivos táctiles */
+@media (hover: none) {
+  .dp:hover { stroke: #ffffff08; stroke-width: .3; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ttrack">
+    <span class="ti">SEGUNDA VUELTA · PERÚ 2026</span>
+    <span class="ti">KEIKO FUJIMORI (FP) <b class="k" id="tk-k">—</b></span>
+    <span class="ti">ROBERTO SÁNCHEZ (JPP) <b class="r" id="tk-r">—</b></span>
+    <span class="ti">DIFERENCIA <b id="tk-d">—</b></span>
+    <span class="ti">DISTRITOS <b id="tk-n">—</b></span>
+    <span class="ti">FUENTE: ONPE · MAPA: INEI 2023</span>
+    <span class="ti">SEGUNDA VUELTA · PERÚ 2026</span>
+    <span class="ti">KEIKO FUJIMORI (FP) <b class="k">—</b></span>
+    <span class="ti">ROBERTO SÁNCHEZ (JPP) <b class="r">—</b></span>
+    <span class="ti">DIFERENCIA <b>—</b></span>
+    <span class="ti">DISTRITOS <b>—</b></span>
+    <span class="ti">FUENTE: ONPE · MAPA: INEI 2023</span>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div>
+    <div class="ey">Análisis Electoral · Segunda Vuelta Presidencial 2026</div>
+    <h1>PERÚ <span class="ek">DIVIDIDO</span> EN <span class="er">DOS</span></h1>
+    <div class="sub" id="hdr-sub">Cargando mapa y datos…</div>
+  </div>
+  <div class="sw">
+    <div class="sc">
+      <div class="sk"><div class="sn">Keiko Fujimori · FP</div>
+        <div class="sp" id="sc-k">—</div><div class="sv" id="sc-kv">—</div></div>
+      <div class="sr"><div class="sn">Roberto Sánchez · JPP</div>
+        <div class="sp" id="sc-r">—</div><div class="sv" id="sc-rv">—</div></div>
+    </div>
+    <div class="race"><div class="rk" id="rk" style="width:50%"></div>
+      <div class="rr" id="rr" style="width:50%"></div></div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="st"><div class="stv" id="st-k" style="color:var(--kl)">—</div><div class="stl">Distritos Keiko</div></div>
+  <div class="st"><div class="stv" id="st-r" style="color:var(--rl)">—</div><div class="stl">Distritos Sánchez</div></div>
+  <div class="st"><div class="stv" id="st-mg">—</div><div class="stl">Margen nacional</div></div>
+  <div class="st"><div class="stv" id="st-n">—</div><div class="stl">Con datos</div></div>
+</div>
+
+<!-- BODY -->
+<div class="body">
+  <div class="mwrap">
+    <div class="ov" id="ov-load">
+      <div class="spin"></div>
+      <div class="ltxt" id="load-txt">CARGANDO MAPA Y DATOS…</div>
+    </div>
+    <svg id="svg"></svg>
+    <div class="badge" id="badge">PERÚ · INEI 2023</div>
+    <div class="mc">
+      <button class="mb" id="zi">+</button>
+      <button class="mb" id="zo">−</button>
+      <button class="mb" id="zr" style="font-size:11px">⌂</button>
+    </div>
+  </div>
+
+  <div class="sb">
+    <!-- Scoreboard móvil (visible solo en <600px vía CSS) -->
+    <div class="sb-score" style="display:none">
+      <div class="sc">
+        <div class="sk">
+          <div class="sn">Keiko Fujimori · FP</div>
+          <div class="sp" id="sc-k-m">—</div>
+          <div class="sv" id="sc-kv-m">—</div>
+        </div>
+        <div class="sr">
+          <div class="sn">Roberto Sánchez · JPP</div>
+          <div class="sp" id="sc-r-m">—</div>
+          <div class="sv" id="sc-rv-m">—</div>
+        </div>
+      </div>
+      <div class="race">
+        <div class="rk" id="rk-m" style="width:50%"></div>
+        <div class="rr" id="rr-m" style="width:50%"></div>
+      </div>
+    </div>
+    <div class="vts">
+      <div class="vt on" data-v="ganador">Ganador</div>
+      <div class="vt" data-v="margen">Margen</div>
+      <div class="vt" data-v="keiko">% K</div>
+      <div class="vt" data-v="roberto">% R</div>
+    </div>
+    <div class="pn">
+      <div class="pt">Departamento</div>
+      <select id="filt"><option value="">Todos</option></select>
+    </div>
+    <div class="pn sb-legend">
+      <div class="pt">Leyenda</div>
+      <div class="lr"><div class="ls" style="background:var(--k)"></div>Keiko Fujimori (FP)</div>
+      <div class="lr"><div class="ls" style="background:var(--r)"></div>Roberto Sánchez (JPP)</div>
+      <div class="lr"><div class="ls" style="background:var(--bd)"></div>Sin datos</div>
+      <div style="margin-top:8px">
+        <div style="font-size:9px;color:var(--dm);margin-bottom:2px">Intensidad = ventaja del candidato</div>
+        <div class="lg" style="background:linear-gradient(90deg,#1a0304,var(--k))"></div>
+        <div class="ll"><span>empate</span><span style="color:var(--kl)">Keiko →</span><span>60pp+</span></div>
+        <div class="lg" style="background:linear-gradient(90deg,#05101e,var(--r));margin-top:3px"></div>
+        <div class="ll"><span>empate</span><span style="color:var(--rl)">Roberto →</span><span>60pp+</span></div>
+      </div>
+    </div>
+    <div class="pn" id="det">
+      <div class="pt">Distrito seleccionado</div>
+      <div class="de">Haz clic en un distrito</div>
+    </div>
+    <div class="pn">
+      <div class="pt">Polarización por departamento</div>
+      <div id="toplist"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Datos: <b>ONPE</b> · resultadosegundavuelta.onpe.gob.pe</span>
+  <span id="ft">Mapa: INEI 2023 · TopoJSON · 1,890 distritos</span>
+</footer>
+
+<div id="tt">
+  <div class="ttn" id="tt-n"></div>
+  <div class="ttl" id="tt-l"></div>
+  <div id="tt-b"></div>
+</div>
+
+<script>
+// ── MAPEO DE NOMBRES: CSV ONPE → GeoJSON INEI 2023 ─────────────────────────
+// Normalización distinta entre fuentes: tildes, ortografía, guiones
+const NAME_FIX = {
+  'AMAZONAS|RODRIGUEZ DE MENDOZA|MILPUCC'              :'AMAZONAS|RODRIGUEZ DE MENDOZA|MILPUC',
+  'ANCASH|ANTONIO RAIMONDI|ACZO'                       :'ANCASH|ANTONIO RAYMONDI|ACZO',
+  'ANCASH|ANTONIO RAIMONDI|CHACCHO'                    :'ANCASH|ANTONIO RAYMONDI|CHACCHO',
+  'ANCASH|ANTONIO RAIMONDI|CHINGAS'                    :'ANCASH|ANTONIO RAYMONDI|CHINGAS',
+  'ANCASH|ANTONIO RAIMONDI|LLAMELLIN'                  :'ANCASH|ANTONIO RAYMONDI|LLAMELLIN',
+  'ANCASH|ANTONIO RAIMONDI|MIRGAS'                     :'ANCASH|ANTONIO RAYMONDI|MIRGAS',
+  'ANCASH|ANTONIO RAIMONDI|SAN JUAN DE RONTOY'         :'ANCASH|ANTONIO RAYMONDI|SAN JUAN DE RONTOY',
+  'APURIMAC|AYMARAES|IHUAYLLO'                         :'APURIMAC|AYMARAES|HUAYLLO',
+  'APURIMAC|CHINCHEROS|ANCO HUALLO'                    :'APURIMAC|CHINCHEROS|ANCO_HUALLO',
+  'AREQUIPA|AREQUIPA|SANTA RITA DE SIHUAS'             :'AREQUIPA|AREQUIPA|SANTA RITA DE SIGUAS',
+  'AYACUCHO|PARINACOCHAS|SAN FRANCISCO DE RIVACAYCO'   :'AYACUCHO|PARINACOCHAS|SAN FRANCISCO DE RAVACAYCO',
+  'AYACUCHO|VICTOR FAJARDO|HUALLA'                     :'AYACUCHO|VICTOR FAJARDO|HUAYA',
+  'CALLAO|CALLAO|CARMEN DE LA LEGUA - REYNOSO'         :'CALLAO|CALLAO|CARMEN DE LA LEGUA REYNOSO',
+  'HUANCAVELICA|ANGARAES|HUALLAY - GRANDE'             :'HUANCAVELICA|ANGARAES|HUAYLLAY GRANDE',
+  'HUANUCO|AMBO|TOMAY - KICHWA'                        :'HUANUCO|AMBO|TOMAY KICHWA',
+  'PUNO|EL COLLAO|CAPASO'                              :'PUNO|EL COLLAO|CAPAZO',
+  'TACNA|TARATA|ESTIQUE PAMPA'                         :'TACNA|TARATA|ESTIQUE-PAMPA',
+};
+
+// ── NORMALIZAR TEXTO ────────────────────────────────────────────────────────
+function norm(s) {
+  return (s || '').toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+// ── ESTADO ──────────────────────────────────────────────────────────────────
+let geo = null;
+let byName = {};    // "DEPT|PROV|DIST" normalizado → fila CSV
+let view = 'ganador';
+let filtDept = '';
+let zoomB;
+
+// ── LOOKUP: props GeoJSON → fila CSV ─────────────────────────────────────────
+function lookup(props) {
+  const key = norm(props.nombdep)+'|'+norm(props.nombprov)+'|'+norm(props.nombdist);
+  return byName[key] || null;
+}
+
+// ── COLOR ────────────────────────────────────────────────────────────────────
+const CK = '#C1272D', CR = '#1B4F8A', CN = '#181c28';
+
+function getColor(props) {
+  const row = lookup(props);
+  if (!row) return CN;
+  const k = +row.pct_keiko || 0;
+  const r = +row.pct_roberto || 0;
+  if (!k && !r) return CN;
+
+  const m = Math.abs(k - r);
+  const t = Math.min(m / 50, 1);  // 0 = empate, 1 = 50pp de ventaja
+
+  if (view === 'keiko')   return d3.interpolate('#0f0203', CK)(Math.min(k/70,1));
+  if (view === 'roberto') return d3.interpolate('#020810', CR)(Math.min(r/70,1));
+  if (view === 'margen')
+    return k > r ? d3.interpolate('#200406', CK)(t) : d3.interpolate('#060f1c', CR)(t);
+  // ganador
+  return k > r ? d3.interpolate('#1a0304', CK)(t) : d3.interpolate('#05101e', CR)(t);
+}
+
+// ── RENDER MAP ────────────────────────────────────────────────────────────────
+function renderMap() {
+  if (!geo) return;
+  const svg  = d3.select('#svg');
+  const wrap = document.querySelector('.mwrap');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  svg.selectAll('*').remove();
+
+  const features = filtDept
+    ? geo.features.filter(f => f.properties.nombdep === filtDept)
+    : geo.features;
+  const fc = { type:'FeatureCollection', features };
+
+  const proj = d3.geoMercator().fitExtent([[6,6],[W-6,H-6]], fc);
+  const path = d3.geoPath().projection(proj);
+  const g = svg.append('g');
+
+  zoomB = d3.zoom().scaleExtent([0.3,30])
+    .on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zoomB).on('dblclick.zoom', null);
+
+  // Distritos
+  g.selectAll('.dp')
+    .data(features)
+    .join('path')
+      .attr('class','dp')
+      .attr('d', path)
+      .attr('fill', d => getColor(d.properties))
+      .on('mousemove', (e,d) => showTT(e, d.properties))
+      .on('mouseleave', hideTT)
+      .on('click', (e,d) => {
+        d3.selectAll('.dp').classed('sel',false);
+        d3.select(e.currentTarget).classed('sel',true).raise();
+        showDetail(d.properties);
+      });
+
+  // Bordes departamentales
+  const deptGrp = d3.group(features, f => f.properties.nombdep);
+  deptGrp.forEach(feats => {
+    g.append('path')
+      .datum({type:'FeatureCollection', features: feats})
+      .attr('class','dbl')
+      .attr('d', path);
+  });
+
+  // Zoom automático si filtro activo
+  if (filtDept && features.length) {
+    const [[x0,y0],[x1,y1]] = path.bounds(fc);
+    const sc = Math.min(18, 0.88/Math.max((x1-x0)/W,(y1-y0)/H));
+    svg.transition().duration(600).call(zoomB.transform,
+      d3.zoomIdentity.translate((W-sc*(x0+x1))/2,(H-sc*(y0+y1))/2).scale(sc));
+  }
+}
+
+// ── RECOLOREAR (sin redibujar) ────────────────────────────────────────────────
+function recolor() {
+  d3.selectAll('.dp').attr('fill', d => getColor(d.properties));
+}
+
+// ── TOOLTIP ──────────────────────────────────────────────────────────────────
+const tt = document.getElementById('tt');
+function showTT(e, props) {
+  const row = lookup(props);
+  document.getElementById('tt-n').textContent = props.nombdist||'—';
+  document.getElementById('tt-l').textContent = (props.nombprov||'')+ ' · '+(props.nombdep||'');
+  let html;
+  if (row && (+row.pct_keiko||0)+(+row.pct_roberto||0)>0) {
+    const k=+row.pct_keiko||0, r=+row.pct_roberto||0;
+    const vk=(+row.votos_keiko||0).toLocaleString('es-PE');
+    const vr=(+row.votos_roberto||0).toLocaleString('es-PE');
+    const wc=k>r?'var(--kl)':'var(--rl)';
+    const wn=k>r?'Keiko Fujimori':'Roberto Sánchez';
+    html=`<div class="ttr"><span style="color:var(--kl)">Keiko</span>
+      <span class="ttp" style="color:var(--kl)">${k.toFixed(2)}% <small style="font-size:8px;color:var(--dm)">${vk}</small></span></div>
+      <div class="ttr"><span style="color:var(--rl)">Roberto</span>
+      <span class="ttp" style="color:var(--rl)">${r.toFixed(2)}% <small style="font-size:8px;color:var(--dm)">${vr}</small></span></div>
+      <div class="ttw">Gana <span style="color:${wc}">${wn}</span> · ${Math.abs(k-r).toFixed(2)} pp</div>
+      ${row.pct_actas?`<div class="ttac">Actas: ${(+row.pct_actas).toFixed(1)}%</div>`:''}`;
+  } else {
+    html='<div class="ttnd">Sin datos disponibles</div>';
+  }
+  document.getElementById('tt-b').innerHTML=html;
+  tt.style.opacity='1'; posTT(e);
+}
+function posTT(e){
+  const x=e.clientX+12, y=e.clientY-8;
+  tt.style.left=(x+tt.offsetWidth>innerWidth?e.clientX-tt.offsetWidth-12:x)+'px';
+  tt.style.top=(y+tt.offsetHeight>innerHeight?e.clientY-tt.offsetHeight-8:y)+'px';
+}
+function hideTT(){ tt.style.opacity='0'; }
+
+// ── DETALLE ───────────────────────────────────────────────────────────────────
+function showDetail(props){
+  const row=lookup(props);
+  const panel=document.getElementById('det');
+  const dist=props.nombdist||'—', prov=props.nombprov||'—', dept=props.nombdep||'—';
+  if(!row||(+row.pct_keiko||0)+(+row.pct_roberto||0)===0){
+    panel.innerHTML=`<div class="pt">Distrito seleccionado</div>
+      <div class="dn">${dist}</div><div class="dl">${prov} · ${dept}</div>
+      <div class="de">Sin datos para este distrito.</div>`;
+    return;
+  }
+  const k=+row.pct_keiko||0, r=+row.pct_roberto||0;
+  const vk=(+row.votos_keiko||0).toLocaleString('es-PE');
+  const vr=(+row.votos_roberto||0).toLocaleString('es-PE');
+  const vv=(+row.votos_validos||0).toLocaleString('es-PE');
+  const ac=row.pct_actas?(+row.pct_actas).toFixed(1)+'%':'—';
+  panel.innerHTML=`<div class="pt">Distrito seleccionado</div>
+    <div class="dn">${dist}</div><div class="dl">${prov} · ${dept}</div>
+    <div class="bl"><span class="cn" style="color:var(--kl)">Keiko Fujimori</span>
+      <span class="cp" style="color:var(--kl)">${k.toFixed(2)}%</span></div>
+    <div class="bt"><div class="bf" style="width:${k}%;background:var(--k)"></div></div>
+    <div class="bl"><span class="cn" style="color:var(--rl)">Roberto Sánchez</span>
+      <span class="cp" style="color:var(--rl)">${r.toFixed(2)}%</span></div>
+    <div class="bt"><div class="bf" style="width:${r}%;background:var(--r)"></div></div>
+    <div class="dg">
+      <div class="dc"><div class="dcl">Votos Keiko</div>
+        <div class="dcv" style="color:var(--kl)">${vk}</div></div>
+      <div class="dc"><div class="dcl">Votos Roberto</div>
+        <div class="dcv" style="color:var(--rl)">${vr}</div></div>
+      <div class="dc"><div class="dcl">Votos válidos</div>
+        <div class="dcv">${vv}</div></div>
+      <div class="dc"><div class="dcl">Actas contab.</div>
+        <div class="dcv">${ac}</div></div>
+    </div>`;
+}
+
+// ── ESTADÍSTICAS ──────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+function updateStats(rows){
+  const v=rows.filter(r=>(+r.pct_keiko||0)+(+r.pct_roberto||0)>0);
+  if(!v.length) return;
+  const tK=v.reduce((s,r)=>s+(+r.votos_keiko||0),0);
+  const tR=v.reduce((s,r)=>s+(+r.votos_roberto||0),0);
+  const tot=tK+tR;
+  const pK=tot?100*tK/tot:0, pR=tot?100*tR/tot:0;
+  const dK=v.filter(r=>(+r.pct_keiko||0)>(+r.pct_roberto||0)).length;
+  const dR=v.filter(r=>(+r.pct_roberto||0)>(+r.pct_keiko||0)).length;
+  const mg=Math.abs(pK-pR).toFixed(4);
+  const fv=n=>n>=1e6?(n/1e6).toFixed(2)+'M':n.toLocaleString('es-PE');
+
+  $('sc-k').textContent=pK.toFixed(3)+'%';
+  $('sc-r').textContent=pR.toFixed(3)+'%';
+  $('sc-kv').textContent=fv(tK)+' votos';
+  $('sc-rv').textContent=fv(tR)+' votos';
+  $('rk').style.width=pK+'%'; $('rr').style.width=pR+'%';
+  $('st-k').textContent=dK.toLocaleString('es-PE');
+  $('st-r').textContent=dR.toLocaleString('es-PE');
+  $('st-mg').textContent=mg+' pp';
+  $('st-n').textContent=v.length.toLocaleString('es-PE');
+  $('tk-k').textContent=pK.toFixed(3)+'%';
+  $('tk-r').textContent=pR.toFixed(3)+'%';
+  $('tk-d').textContent=mg+' pp';
+  $('tk-n').textContent=v.length+'/'+rows.length;
+  $('ft').textContent='Mapa: INEI 2023 · '+new Date().toLocaleTimeString('es-PE');
+  // Actualizar scoreboard móvil
+  const skm=$('sc-k-m'),  srm=$('sc-r-m');
+  const skvm=$('sc-kv-m'),sRvm=$('sc-rv-m');
+  const rkm=$('rk-m'),    rrm=$('rr-m');
+  if(skm)  skm.textContent=pK.toFixed(3)+'%';
+  if(srm)  srm.textContent=pR.toFixed(3)+'%';
+  if(skvm) skvm.textContent=fv(tK)+' votos';
+  if(sRvm) sRvm.textContent=fv(tR)+' votos';
+  if(rkm)  rkm.style.width=pK+'%';
+  if(rrm)  rrm.style.width=pR+'%';
+  buildTop(v);
+}
+
+function buildTop(rows){
+  const byD={};
+  rows.forEach(r=>{
+    const d=r.departamento||'—';
+    if(!byD[d]) byD[d]={k:0,r:0};
+    byD[d].k+=(+r.votos_keiko||0);
+    byD[d].r+=(+r.votos_roberto||0);
+  });
+  const list=Object.entries(byD).map(([dept,v])=>{
+    const t=v.k+v.r;
+    const pk=t?100*v.k/t:0, pr=t?100*v.r/t:0;
+    return{dept,pk,pr,m:Math.abs(pk-pr),w:pk>pr?'k':'r'};
+  }).filter(d=>d.m>0).sort((a,b)=>b.m-a.m);
+
+  $('toplist').innerHTML=list.slice(0,13).map((it,i)=>`
+    <div class="tr">
+      <span class="tn">${i+1}</span>
+      <span class="td" style="background:${it.w==='k'?CK:CR}"></span>
+      <span class="tnm">${it.dept}</span>
+      <span class="tv" style="color:${it.w==='k'?'var(--kl)':'var(--rl)'}">
+        ${it.w==='k'?'K':'R'} +${it.m.toFixed(1)}pp</span>
+    </div>`).join('');
+}
+
+// ── PROCESAR CSV ──────────────────────────────────────────────────────────────
+function buildIndex(rows){
+  byName={};
+  rows.forEach(row=>{
+    const d=norm(row.departamento||'');
+    const p=norm(row.provincia||'');
+    const di=norm(row.distrito||'');
+    let key=d+'|'+p+'|'+di;
+    // Aplicar fix de nombres si existe
+    if(NAME_FIX[key]) key=NAME_FIX[key];
+    byName[key]=row;
+  });
+  console.log(`Índice construido: ${Object.keys(byName).length} entradas`);
+}
+
+function processCSV(text){
+  const{data}=Papa.parse(text,{header:true,skipEmptyLines:true,dynamicTyping:true});
+  if(!data.length){alert('CSV vacío o formato incorrecto.');return;}
+  buildIndex(data);
+  updateStats(data);
+
+  // Llenar filtro departamentos
+  const depts=[...new Set(data.map(r=>r.departamento).filter(Boolean))].sort();
+  const sel=$('filt');
+  sel.innerHTML='<option value="">Todos los departamentos</option>'+
+    depts.map(d=>`<option value="${d}">${d}</option>`).join('');
+
+  renderMap();
+  $('hdr-sub').textContent=`${data.length.toLocaleString('es-PE')} distritos · join por nombre · INEI 2023`;
+}
+
+// ── CARGA PARALELA: GeoJSON + CSV ─────────────────────────────────────────────
+async function init(){
+  $('load-txt').textContent='CARGANDO MAPA Y DATOS…';
+  try{
+    // Cargar GeoJSON y CSV en paralelo
+    const[topoRes, csvRes] = await Promise.all([
+      fetch('peru_distrital.topojson'),
+      fetch('onpe_sv2026_COMPLETO.csv')
+    ]);
+    if(!topoRes.ok) throw new Error('TopoJSON: HTTP '+topoRes.status);
+    if(!csvRes.ok)  throw new Error('CSV: HTTP '+csvRes.status);
+
+    $('load-txt').textContent='PROCESANDO…';
+
+    const[topoJson, csvText] = await Promise.all([
+      topoRes.json(),
+      csvRes.text()
+    ]);
+
+    // Convertir TopoJSON → GeoJSON FeatureCollection en memoria
+    geo = topojson.feature(topoJson, topoJson.objects.distritos);
+    processCSV(csvText);
+    $('ov-load').classList.add('hidden');
+    $('badge').textContent=`PERÚ · ${geo.features.length.toLocaleString('es-PE')} distritos · INEI 2023`;
+
+  }catch(err){
+    $('load-txt').textContent='Error: '+err.message;
+    console.error(err);
+  }
+}
+
+// ── EVENTOS ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.vt').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.vt').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on');
+  view=t.dataset.v;
+  recolor();
+}));
+
+$('filt').addEventListener('change',e=>{
+  filtDept=e.target.value;
+  renderMap();
+  if(!filtDept)
+    d3.select('#svg').transition().duration(500).call(zoomB.transform,d3.zoomIdentity);
+});
+
+$('zi').addEventListener('click',()=>d3.select('#svg').transition().call(zoomB.scaleBy,1.6));
+$('zo').addEventListener('click',()=>d3.select('#svg').transition().call(zoomB.scaleBy,0.625));
+$('zr').addEventListener('click',()=>d3.select('#svg').transition().duration(400)
+  .call(zoomB.transform,d3.zoomIdentity));
+
+window.addEventListener('resize',()=>{if(geo) renderMap();});
+
+// ── ARRANQUE ──────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
